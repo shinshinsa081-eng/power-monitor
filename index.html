@@ -3461,5 +3461,31 @@ renderAll();
 </script>
 
 
+  ...기존 내용...
 
+<script>
+(function () {
+  const RELOAD_HOUR = 9;
+  const RELOAD_MIN  = 0;
+
+  function scheduleReload() {
+    const now  = new Date();
+    const next = new Date(now);
+    next.setHours(RELOAD_HOUR, RELOAD_MIN, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+
+    const delay = next - now;
+    console.log('다음 새로고침 예정:', next.toLocaleString('ko-KR'));
+
+    setTimeout(() => {
+      location.replace(location.pathname + '?t=' + Date.now());
+    }, delay);
+  }
+
+  scheduleReload();
+})();
+</script>
+
+</body>
+</html>
 </body></html>
