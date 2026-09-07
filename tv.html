@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<title>전력 사용량 모니터 · 벽면 TV</title>
+
+<!-- ════════════════════════════════════════════════════════════
+     벽면 TV 전용 껍데기 화면입니다.
+
+     TV 에서는 index.html 이 아니라 이 tv.html 을 띄워 두세요.
+     대시보드는 이 안의 틀(iframe) 안에서 돌아갑니다.
+
+     이렇게 하는 이유
+       브라우저 규칙상 전체화면은 사람이 한 번 눌러야만 켜집니다.
+       그런데 페이지를 새로고침하면 전체화면이 풀려 버립니다.
+       이 껍데기 화면은 스스로 새로고침하지 않고, 안쪽 대시보드만
+       매일 9시 20분에 새로 불러옵니다.
+       그래서 처음에 딱 한 번만 눌러 주면, 그 뒤로는 TV 를 끄기
+       전까지 계속 전체화면이 유지됩니다.
+     ════════════════════════════════════════════════════════════ -->
+
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: #000; overflow: hidden;
+  }
+  #frame {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    border: 0; display: block;
+  }
+  /* 처음 한 번 눌러 달라는 안내막. 전체화면이 되면 사라집니다. */
+  #tap {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 18px;
+    background: rgba(0, 0, 0, .82);
+    color: #fff; cursor: pointer;
+    font-family: "Pretendard Variable", Pretendard, -apple-system, "Malgun Gothic", sans-serif;
+    text-align: center;
+    -webkit-user-select: none; user-select: none;
+  }
+  #tap .big { font-size: 44px; font-weight: 800; letter-spacing: -.02em; }
+  #tap .sub { font-size: 20px; font-weight: 500; color: #b9c0cc; line-height: 1.6; }
+  #tap .key { font-size: 16px; color: #7d8695; margin-top: 6px; }
+  #tap.hide { display: none; }
+</style>
+</head>
+<body>
+
+<iframe id="frame" src="" allow="fullscreen" title="전력 사용량 모니터"></iframe>
+
+<div id="tap">
+  <div class="big">화면을 한 번 눌러 주세요</div>
+  <div class="sub">전체화면으로 바뀌고, 그 뒤로는 계속 유지됩니다.<br>매일 오전 9시 20분에 안쪽 화면만 스스로 새로 불러옵니다.</div>
+  <div class="key">전체화면을 풀려면 Esc 키</div>
+</div>
+
+<script>
+(function () {
+  /* ── 설정 ──────────────────────────────────────────────
+     같은 폴더에 있는 index.html 을 띄웁니다.
+     다른 주소를 띄우고 싶으면 아래 한 줄만 고치세요.        */
+  const TARGET = 'index.html';
+
+  const frame = document.getElementById('frame');
+  const tap   = document.getElementById('tap');
+
+  /* 캐시를 건너뛰려고 ?t= 를 붙입니다 */
+  frame.src = TARGET + '?t=' + Date.now();
+
+  /* ── 전체화면 ───────────────────────────────────────── */
+  function isFull() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+  /* 키오스크 모드로 띄웠으면 이미 화면 전체를 쓰고 있으므로
+     굳이 누르라고 하지 않습니다. */
+  function isKiosk() {
+    return Math.abs(window.innerHeight - screen.height) < 6;
+  }
+  function goFull() {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (req && !isFull()) { try { req.call(el); } catch (e) { } }
+  }
+  function syncTap() {
+    tap.classList.toggle('hide', isFull() || isKiosk());
+  }
+
+  /* 혹시 자동으로 되는 환경이면 그냥 되게 시도해 봅니다.
+     안 되면 조용히 넘어가고 안내막이 남습니다. */
+  goFull();
+  syncTap();
+
+  /* 아무 데나 누르거나 아무 키나 치면 전체화면 */
+  ['click', 'keydown', 'touchend'].forEach(function (ev) {
+    document.addEventListener(ev, function () { goFull(); }, true);
+  });
+  document.addEventListener('fullscreenchange', syncTap);
+  document.addEventListener('webkitfullscreenchange', syncTap);
+  window.addEventListener('resize', syncTap);
+
+  /* ── 화면 꺼짐 방지 ─────────────────────────────────────
+     지원하는 브라우저에서만 동작합니다. TV 절전으로 화면이
+     꺼지는 것을 막아 줍니다.                                */
+  let lock = null;
+  async function keepAwake() {
+    if (!('wakeLock' in navigator)) return;
+    try { lock = await navigator.wakeLock.request('screen'); } catch (e) { }
+  }
+  keepAwake();
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') keepAwake();
+  });
+
+  /* ── 안전장치 ───────────────────────────────────────────
+     안쪽 화면이 스스로 새로고침하도록 만들어져 있지만,
+     혹시 그게 멈추더라도 이 껍데기가 매일 9시 21분에 안쪽만
+     다시 불러옵니다. 이 페이지 자체는 새로고침하지 않으므로
+     전체화면은 그대로 유지됩니다.                            */
+  const HOUR = 9, MIN = 21;
+  (function schedule() {
+    const now = new Date();
+    const next = new Date(now);
+    next.setHours(HOUR, MIN, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+    setTimeout(function () {
+      frame.src = TARGET + '?t=' + Date.now();
+      schedule();
+    }, next - now);
+  })();
+})();
+</script>
+
+</body>
+</html>
