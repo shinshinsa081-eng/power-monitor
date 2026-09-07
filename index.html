@@ -1637,6 +1637,22 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { this._m = this._m || {}; this._m[k] = v; } },
 };
 
+/* ── 첫 화면 결정 ─────────────────────────────
+   벽면 TV 는 공유용 파일(index.html)을 그대로 띄워 두므로,
+   공유용 파일은 열자마자(그리고 새로고침 뒤에도) 모니터용
+   화면이 바로 나오게 합니다. 관리자용 파일은 예전처럼
+   대시보드 화면부터 열립니다.
+   주소 뒤에 ?dash=1 을 붙이면 모니터용 파일도 대시보드로,
+   ?mon=1 을 붙이면 관리자용 파일도 모니터용으로 열립니다.   */
+const BOOT_MONITOR = (function () {
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.get('mon') === '1') return true;
+    if (q.get('mon') === '0' || q.get('dash') === '1') return false;
+  } catch (e) { }
+  return VIEWER;          /* 공유용 파일이면 모니터용부터 */
+})();
+
 /* rebind() 가 먼저 실행되어 PLANTS 가 채워진 뒤 상태를 만듭니다. */
 const state = {
   scope: PLANTS.includes(CONFIG.시작화면.범위) || CONFIG.시작화면.범위 === ALL ? CONFIG.시작화면.범위 : PLANTS[0],
@@ -1649,8 +1665,9 @@ const state = {
   /* 화면을 열 때는 항상 '목표대비'부터 봅니다.
      공유용 파일에 구운 기준이 있으면 그것을 따릅니다. */
   tmode: normTmode(DATA.data.bakedTmode) || TMODES[0],
-  /* 화면을 열 때는 항상 '사용량'부터 봅니다. */
-  monitor: false,
+  /* 화면을 열 때 어느 화면부터 볼지는 위의 BOOT_MONITOR 가 정합니다.
+     공유용(벽면 TV) 파일이면 모니터용 화면이 첫 화면입니다. */
+  monitor: BOOT_MONITOR,
   bandMode: 'kwh',
   /* 화면을 열 때는 항상 '요일 구분'부터 봅니다. */
   projMode: 'dow',
@@ -3547,15 +3564,16 @@ renderAll();
 
 </script>
 
-<!-- ══ 매일 아침 9시 정각 자동 새로고침 ══════════════════════
-     벽면 모니터를 계속 켜 둔 상태에서, 매일 오전 9시 정각에
+<!-- ══ 매일 아침 9시 20분 자동 새로고침 ══════════════════════
+     벽면 모니터를 계속 켜 둔 상태에서, 매일 오전 9시 20분에
      스스로 최신 파일을 다시 불러옵니다.
-     GitHub 에 새 index.html 을 올려두면 다음 9시에 반영됩니다.
+     GitHub 에 새 index.html 을 올려두면 다음 9시 20분에 반영됩니다.
+     새로고침 뒤에도 공유용 파일은 모니터용 화면으로 되돌아옵니다.
      시각을 바꾸려면 아래 RELOAD_HOUR·RELOAD_MIN 숫자만 고치세요.        -->
 <script>
 (function () {
   const RELOAD_HOUR = 9;   // 새로고침할 시각 (0~23). 9 = 오전 9시
-  const RELOAD_MIN  = 0;   // 분. 지금은 오전 9시 정각
+  const RELOAD_MIN  = 20;  // 분. 지금은 오전 9시 20분
 
   function scheduleReload() {
     const now  = new Date();
@@ -3568,8 +3586,12 @@ renderAll();
     console.log('[자동 새로고침] 다음 예정:', next.toLocaleString('ko-KR'));
 
     setTimeout(function () {
-      /* ?t= 값을 붙여 GitHub 의 옛 파일(캐시)을 건너뜁니다 */
-      location.replace(location.pathname + '?t=' + Date.now());
+      /* ?t= 값을 붙여 GitHub 의 옛 파일(캐시)을 건너뜁니다.
+         ?mon= · ?dash= 같이 사람이 붙여 둔 값은 그대로 살려 둡니다.  */
+      let q;
+      try { q = new URLSearchParams(location.search); } catch (e) { q = new URLSearchParams(); }
+      q.set('t', Date.now());
+      location.replace(location.pathname + '?' + q.toString());
     }, next - now);
   }
 
